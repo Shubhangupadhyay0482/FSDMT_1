@@ -4,170 +4,85 @@ const app = express();
 
 app.use(express.json());
 
-// Initial Product Data
 let products = [
-    {
-        id: 301,
-        name: "Wireless Mouse",
-        category: "Electronics",
-        price: 799,
-        quantity: 25,
-        inStock: true
-    },
-    {
-        id: 302,
-        name: "Notebook",
-        category: "Stationery",
-        price: 60,
-        quantity: 100,
-        inStock: true
-    },
-    {
-        id: 303,
-        name: "USB Keyboard",
-        category: "Electronics",
-        price: 999,
-        quantity: 0,
-        inStock: false
-    }
+    { id: 301, name: "Wireless Mouse", category: "Electronics", price: 799, quantity: 25, inStock: true },
+    { id: 302, name: "Notebook", category: "Stationery", price: 60, quantity: 100, inStock: true },
+    { id: 303, name: "USB Keyboard", category: "Electronics", price: 999, quantity: 0, inStock: false }
 ];
 
-// 1. GET - Get all products
+
+function valid(p) {
+    return typeof p.name === 'string' && p.name.trim() !== '' &&
+           typeof p.category === 'string' && p.category.trim() !== '' &&
+           typeof p.price === 'number' && Number.isFinite(p.price) && p.price >= 0 &&
+           Number.isInteger(p.quantity) && p.quantity >= 0 &&
+           typeof p.inStock === 'boolean';
+}
+
 app.get('/api/products', (req, res) => {
     res.status(200).json(products);
 });
 
-// 2. POST - Add new product
+
 app.post('/api/products', (req, res) => {
-    const { name, category, price, quantity, inStock } = req.body;
+    if (!valid(req.body))
+        return res.status(400).json({ message: "Invalid data" });
 
-    // Validation
-    if (
-        typeof name !== 'string' || name.trim() === '' ||
-        typeof category !== 'string' || category.trim() === '' ||
-        typeof price !== 'number' || !Number.isFinite(price) || price < 0 ||
-        typeof quantity !== 'number' || !Number.isInteger(quantity) || quantity < 0 ||
-        typeof inStock !== 'boolean'
-    ) {
-        return res.status(400).json({
-            message: "Invalid product data"
-        });
-    }
+    const id = Math.max(300, ...products.map(p => p.id)) + 1;
+    const product = { id, ...req.body };
 
-    // Generate unique ID
-    const newId = products.length > 0
-        ? Math.max(...products.map(p => p.id)) + 1
-        : 301;
-
-    const newProduct = {
-        id: newId,
-        name: name.trim(),
-        category: category.trim(),
-        price,
-        quantity,
-        inStock
-    };
-
-    products.push(newProduct);
-
-    res.status(201).json({
-        message: "Product added successfully",
-        product: newProduct
-    });
+    products.push(product);
+    res.status(201).json(product);
 });
 
-// 3. GET - Get product by ID
+
+app.get('/api/products/filter', (req, res) => {
+    const category = req.query.category;
+
+    if (typeof category !== 'string' || !category.trim())
+        return res.status(400).json({ message: "Category required" });
+
+    const result = products.filter(
+        p => p.category.toLowerCase() === category.trim().toLowerCase()
+    );
+
+    res.status(200).json(result);
+});
+
+
 app.get('/api/products/:id', (req, res) => {
-    const id = Number(req.params.id);
+    const product = products.find(p => p.id === Number(req.params.id));
 
-    const product = products.find(p => p.id === id);
-
-    if (!product) {
-        return res.status(404).json({
-            message: "Product not found"
-        });
-    }
+    if (!product)
+        return res.status(404).json({ message: "Product not found" });
 
     res.status(200).json(product);
 });
 
-// 4. PUT - Update product
+
 app.put('/api/products/:id', (req, res) => {
-    const id = Number(req.params.id);
+    const product = products.find(p => p.id === Number(req.params.id));
 
-    const product = products.find(p => p.id === id);
+    if (!product)
+        return res.status(404).json({ message: "Product not found" });
 
-    if (!product) {
-        return res.status(404).json({
-            message: "Product not found"
-        });
-    }
+    if (!valid(req.body))
+        return res.status(400).json({ message: "Invalid data" });
 
-    const { name, category, price, quantity, inStock } = req.body;
-
-    // Validation
-    if (
-        typeof name !== 'string' || name.trim() === '' ||
-        typeof category !== 'string' || category.trim() === '' ||
-        typeof price !== 'number' || !Number.isFinite(price) || price < 0 ||
-        typeof quantity !== 'number' || !Number.isInteger(quantity) || quantity < 0 ||
-        typeof inStock !== 'boolean'
-    ) {
-        return res.status(400).json({
-            message: "Invalid product data"
-        });
-    }
-
-    product.name = name.trim();
-    product.category = category.trim();
-    product.price = price;
-    product.quantity = quantity;
-    product.inStock = inStock;
-
-    res.status(200).json({
-        message: "Product updated successfully",
-        product: product
-    });
+    Object.assign(product, req.body);
+    res.status(200).json(product);
 });
 
-// 5. DELETE - Delete product
+
 app.delete('/api/products/:id', (req, res) => {
     const id = Number(req.params.id);
+    const exists = products.some(p => p.id === id);
 
-    const product = products.find(p => p.id === id);
-
-    if (!product) {
-        return res.status(404).json({
-            message: "Product not found"
-        });
-    }
+    if (!exists)
+        return res.status(404).json({ message: "Product not found" });
 
     products = products.filter(p => p.id !== id);
-
-    res.status(200).json({
-        message: "Product deleted successfully"
-    });
+    res.status(200).json({ message: "Product deleted successfully" });
 });
 
-// 6. GET - Filter products by category
-// Keep this route before /api/products/:id
-app.get('/api/products/filter', (req, res) => {
-    const category = req.query.category;
-
-    if (typeof category !== 'string' || category.trim() === '') {
-        return res.status(400).json({
-            message: "Please provide a category"
-        });
-    }
-
-    const filteredProducts = products.filter(
-        p => p.category.toLowerCase() === category.trim().toLowerCase()
-    );
-
-    res.status(200).json(filteredProducts);
-});
-
-// Start Server
-app.listen(3000, () => {
-    console.log("Server running on port 3000");
-});
+app.listen(3000, () => console.log("Server running on port 3000"));
